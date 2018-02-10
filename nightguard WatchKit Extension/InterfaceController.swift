@@ -42,8 +42,8 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
         // Initialize the ChartScene
         let bounds = WKInterfaceDevice.current().screenBounds
         let chartSceneHeight = determineSceneHeightFromCurrentWatchType(interfaceBounds: bounds)
-        chartScene = ChartScene(size: CGSize(width: bounds.width, height: chartSceneHeight), newCanvasWidth: bounds.width * 6)
-        spriteKitView.presentScene(chartScene)
+        //chartScene = ChartScene(size: CGSize(width: bounds.width, height: chartSceneHeight), newCanvasWidth: bounds.width * 6)
+        //spriteKitView.presentScene(chartScene)
         
         createMenuItems()
     }
@@ -62,14 +62,14 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
     
     override func willActivate() {
         
-        spriteKitView.isPaused = false
+        //spriteKitView.isPaused = false
         
         // Start the timer to retrieve new bgValues and update the ui periodically
         // if the user keeps the display active for a longer time
-        createNewTimerSingleton()
+        //createNewTimerSingleton()
         
         // manually refresh the gui by fireing the timer
-        timerDidEnd(timer)
+        //timerDidEnd(timer)
         
         // Ask to get 8 minutes of cpu runtime to get the next values if
         // the app stays in frontmost state
@@ -83,22 +83,22 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
     
     override func didAppear() {
         
-        spriteKitView.isPaused = false
+        //spriteKitView.isPaused = false
         
         crownSequencer.focus()
         crownSequencer.delegate = self
     }
     
     override func willDisappear() {
-        spriteKitView.isPaused = true
+        //spriteKitView.isPaused = true
     }
     
     override func didDeactivate() {
         // This method is called when watch view controller is no longer visible
         super.didDeactivate()
         
-        timer.invalidate();
-        spriteKitView.isPaused = true
+        //timer.invalidate();
+        //spriteKitView.isPaused = true
     }
     
     // called when the crown rotates, rotationalDelta is the change since the last call (sign indicates direction).
@@ -112,7 +112,7 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
                 chartScene.scale(1 + CGFloat(rotationalDelta), keepScale: true)
             }
         } else {
-            chartScene.moveChart(rotationalDelta * 200)
+            //chartScene.moveChart(rotationalDelta * 200)
         }
     }
     
@@ -150,11 +150,11 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
     
     // check whether new Values should be retrieved
     @objc func timerDidEnd(_ timer:Timer){
-        assureThatBaseUriIsExisting()
-        assureThatDisplayUnitsIsDefined()
+        //assureThatBaseUriIsExisting()
+        //assureThatDisplayUnitsIsDefined()
         
-        loadAndPaintCurrentBgData()
-        loadAndPaintChartData(forceRepaint: false)
+        //loadAndPaintCurrentBgData()
+        //loadAndPaintChartData(forceRepaint: false)
     }
     
     // this has to be created programmatically, since only this way

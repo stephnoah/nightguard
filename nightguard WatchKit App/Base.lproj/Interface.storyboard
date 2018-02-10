@@ -56,9 +56,6 @@
                                 </group>
                             </items>
                         </group>
-                        <spriteKitScene width="155" height="140" alignment="left" id="HJ3-mD-NFS">
-                            <variation key="device=watch38mm" height="115"/>
-                        </spriteKitScene>
                     </items>
                     <menu key="menu" id="YiW-tI-jRp"/>
                     <connections>
@@ -67,7 +64,6 @@
                         <outlet property="deltaArrowLabel" destination="nnO-nW-RbM" id="aR3-me-buM"/>
                         <outlet property="deltaLabel" destination="frk-q8-3y9" id="KvH-er-bpE"/>
                         <outlet property="iobLabel" destination="oxQ-6L-Aqk" id="fNu-BR-2Ss"/>
-                        <outlet property="spriteKitView" destination="HJ3-mD-NFS" id="hnU-4D-1mD"/>
                         <outlet property="timeLabel" destination="w1H-tu-XyX" id="KWM-Y9-FDg"/>
                     </connections>
                 </controller>
