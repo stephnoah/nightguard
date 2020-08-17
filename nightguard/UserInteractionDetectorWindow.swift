@@ -44,8 +44,8 @@ class UserInteractionDetectorWindow: UIWindow {
     override init(frame: CGRect) {
         super.init(frame: frame)
         
-        NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground(_:)), name: NSNotification.Name.UIApplicationDidEnterBackground, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground(_:)), name: NSNotification.Name.UIApplicationWillEnterForeground, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground(_:)), name: UIApplication.didEnterBackgroundNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground(_:)), name: UIApplication.willEnterForegroundNotification, object: nil)
     }
     
     required init?(coder aDecoder: NSCoder) {
@@ -72,7 +72,7 @@ class UserInteractionDetectorWindow: UIWindow {
         
         if let touches = event.allTouches {
             for touch in touches {
-                if touch.phase == UITouchPhase.began {
+                if touch.phase == UITouch.Phase.began {
                     self.resetIdleTimer()
                 }
             }
@@ -92,8 +92,10 @@ class UserInteractionDetectorWindow: UIWindow {
         if let brightness = self.originalBrightness {
             
             // reset the brightness to previous value...
-            UIScreen.main.setBrightness(brightness, animated: true)
-            originalBrightness = nil
+            DispatchQueue.main.async {
+                UIScreen.main.brightness = brightness
+                self.originalBrightness = nil
+            }
             
             // ... and remove the dim view overlay
             dimView?.removeFromSuperview()
@@ -130,14 +132,16 @@ class UserInteractionDetectorWindow: UIWindow {
         
         if dimScreenOnTimeout {
             
-            // create the overlay "dim view" - a tranparent view will be a default, it will catch the first user interaction, then it will be removed from screen
+            // create the overlay "dim view" - a transparent view will be a default, it will catch the first user interaction, then it will be removed from screen
             let viewType = dimScreenViewType ?? UIView.self
             dimView = viewType.init(frame: CGRect(origin: self.bounds.origin, size: self.bounds.size))
             addSubview(dimView!)
     
             // reduce screen brightness
-            originalBrightness = UIScreen.main.brightness
-            UIScreen.main.setBrightness(0, animated: true)
+            DispatchQueue.main.async {
+                self.originalBrightness = UIScreen.main.brightness
+                UIScreen.main.brightness = 0
+            }
         }
     }
 }

@@ -21,7 +21,7 @@ class NightscoutData : NSObject, NSCoding, Codable {
             if time == 0 {
                 return "??:??"
             }
-            let formatter = DateFormatter.init()
+            let formatter = DateFormatter()
             formatter.dateFormat = "HH:mm"
             
             let date = Date.init(timeIntervalSince1970: Double(time.int64Value / 1000))
@@ -49,6 +49,7 @@ class NightscoutData : NSObject, NSCoding, Codable {
     var time : NSNumber = 0
     var battery : String = "---"
     var iob : String = ""
+    var cob : String = ""
     var rawbg: String = "---"
     var noise: String = "---"
     
@@ -64,6 +65,7 @@ class NightscoutData : NSObject, NSCoding, Codable {
         case time
         case battery
         case iob
+        case cob
         case rawbg
         case noise
     }
@@ -72,7 +74,7 @@ class NightscoutData : NSObject, NSCoding, Codable {
     // MARK:- NSCoding interface implementation
     
     /* 
-        Code to deserialize BgData content. The error handling is need in case that old serialized
+        Code to deserialize BgData content. The error handling is needed in case that old serialized
         data leads to an error.
     */
     required init(coder decoder: NSCoder) {
@@ -112,6 +114,11 @@ class NightscoutData : NSObject, NSCoding, Codable {
         }
         self.iob = iob
         
+        guard let cob = decoder.decodeObject(forKey: "cob") as? String else {
+            return
+        }
+        self.cob = cob
+        
         guard let rawbg = decoder.decodeObject(forKey: "rawbg") as? String else {
             return
         }
@@ -134,6 +141,7 @@ class NightscoutData : NSObject, NSCoding, Codable {
         aCoder.encode(self.time, forKey: "time")
         aCoder.encode(self.battery, forKey: "battery")
         aCoder.encode(self.iob, forKey: "iob")
+        aCoder.encode(self.cob, forKey: "cob")
         aCoder.encode(self.rawbg, forKey: "rawbg")
         aCoder.encode(self.noise, forKey: "noise")
     }
@@ -156,6 +164,7 @@ class NightscoutData : NSObject, NSCoding, Codable {
         self.time = NSNumber(floatLiteral: try container.decode(Double.self, forKey: .time))
         self.battery = try container.decode(String.self, forKey: .battery)
         self.iob = try container.decode(String.self, forKey: .iob)
+        self.cob = try container.decode(String.self, forKey: .cob)
         self.rawbg = try container.decode(String.self, forKey: .rawbg)
         self.noise = try container.decode(String.self, forKey: .noise)
     }
@@ -178,6 +187,7 @@ class NightscoutData : NSObject, NSCoding, Codable {
         try container.encode(self.time.doubleValue, forKey: .time)
         try container.encode(self.battery, forKey: .battery)
         try container.encode(self.iob, forKey: .iob)
+        try container.encode(self.cob, forKey: .cob)
         try container.encode(self.rawbg, forKey: .rawbg)
         try container.encode(self.noise, forKey: .noise)
     }

@@ -22,6 +22,13 @@ class NightscoutService {
     let ONE_DAY_IN_MICROSECONDS = Double(60*60*24*1000)
     let DIRECTIONS = ["-", "↑↑", "↑", "↗", "→", "↘︎", "↓", "↓↓", "-", "-"]
     
+    enum EventType : String {
+        case sensorStart = "Sensor Start"
+        case pumpBatteryChange = "Pump Battery Change"
+        case cannulaChange = "Site Change"
+        case temporaryTarget = "Temporary Target"
+    }
+    
     /* Reads the last 20 historic blood glucose data from the nightscout server. */
     @discardableResult
     func readChartData(_ resultHandler : @escaping (NightscoutRequestResult<[Int]>) -> Void) -> URLSessionTask? {
@@ -44,7 +51,7 @@ class NightscoutService {
                 }
                 
                 guard data != nil else {
-                    resultHandler(.error(self.createNoDataError(description: "No data received from Nightscout entries API")))
+                    resultHandler(.error(self.createNoDataError(description: NSLocalizedString("No data received from Nightscout entries API", comment: "No data from NS entries API"))))
                     return
                 }
                 
@@ -92,7 +99,7 @@ class NightscoutService {
                 }
                 
                 guard data != nil else {
-                    resultHandler(.error(self.createNoDataError(description: "No data received from Nightscout status API")))
+                    resultHandler(.error(self.createNoDataError(description: NSLocalizedString("No data received from Nightscout status API", comment: "No data from NS status API"))))
                     return
                 }
                 
@@ -172,7 +179,7 @@ class NightscoutService {
             guard data != nil else {
                 print("The received data was nil...")
                 dispatchOnMain { [unowned self] in
-                    resultHandler(.error(self.createNoDataError(description: "No data received from Nightscout entries API")))
+                    resultHandler(.error(self.createNoDataError(description: NSLocalizedString("No data received from Nightscout entries API", comment: "No data from NS entries API"))))
                     }
                 return
             }
@@ -181,7 +188,7 @@ class NightscoutService {
             guard !stringSgvData.contains("<html") else {
                 print("Invalid data with html received")  // TODO: pop an error alert
                 dispatchOnMain { [unowned self] in
-                    resultHandler(.error(self.createNoDataError(description: "Invalid data with HTML received from Nightscout entries API")))
+                    resultHandler(.error(self.createNoDataError(description: NSLocalizedString("Invalid data with HTML received from Nightscout entries API", comment: "Invalid data from NS entries API"))))
                 }
                 return
             }
@@ -226,7 +233,7 @@ class NightscoutService {
         var mergedValues = oldValues
         for valueToInsert in newValues {
             
-            if let index = mergedValues.index(where: { $0.timestamp > valueToInsert.timestamp }) {
+            if let index = mergedValues.firstIndex(where: { $0.timestamp > valueToInsert.timestamp }) {
                 mergedValues.insert(valueToInsert, at: index)
             } else {
                 // the new value is later than all other values => just append
@@ -360,8 +367,16 @@ class NightscoutService {
             return nil
         }
         
+        // Force mmol if that has been configured
+        var enforceMmolQueryParams : [String:String] = [:]
+        if UserDefaultsRepository.units.value == Units.mmol {
+            enforceMmolQueryParams = [
+                "units" : "mmol"
+                ]
+        }
+        
         // Get the current data from REST-Call
-        let url = UserDefaultsRepository.getUrlWithPathAndQueryParameters(path: "pebble", queryParams:[:])
+        let url = UserDefaultsRepository.getUrlWithPathAndQueryParameters(path: "pebble", queryParams: enforceMmolQueryParams)
         guard url != nil else {
             resultHandler(.error(createEmptyOrInvalidUriError()))
             return nil
@@ -384,7 +399,7 @@ class NightscoutService {
             guard data != nil else {
                 print("Pebble Watch Data was nil.")
                 dispatchOnMain { [unowned self] in
-                    resultHandler(.error(self.createNoDataError(description: "No data received from Pebble Watch API")))
+                    resultHandler(.error(self.createNoDataError(description: NSLocalizedString("No data received from Pebble Watch API", comment: "No data from Pebble API"))))
                 }
                 return
             }
@@ -414,7 +429,7 @@ class NightscoutService {
         do {
             let json = try JSONSerialization.jsonObject(with: data, options: JSONSerialization.ReadingOptions.mutableContainers)
             guard let jsonDict :NSDictionary = json as? NSDictionary else {
-                let error = NSError(domain: "PebbleWatchDataError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid JSON received from Pebble Watch API"])
+                let error = NSError(domain: "PebbleWatchDataError", code: -1, userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("Invalid JSON received from Pebble Watch API", comment: "Invalid JSON from Pebble API")])
                 dispatchOnMain {
                     resultHandler(.error(error))
                 }
@@ -422,7 +437,7 @@ class NightscoutService {
             }
             let bgs = jsonDict.object(forKey: "bgs") as? NSArray
             guard bgs != nil else {
-                let error = NSError(domain: "PebbleWatchDataError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid JSON received from Pebble Watch API, missing bgs array. Check Nightscout configuration. "])
+                let error = NSError(domain: "PebbleWatchDataError", code: -1, userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("Invalid JSON received from Pebble Watch API, missing bgs array. Check Nightscout configuration. ", comment: "Invalid JSON from Pebble API, missing bgs, check NS conf")])
                 dispatchOnMain {
                     resultHandler(.error(error))
                 }
@@ -436,15 +451,14 @@ class NightscoutService {
                 
                 let nightscoutData = NightscoutData()
                 let battery : NSString? = currentBgs.object(forKey: "battery") as? NSString
-                
-                //Get Insulin On Board from Nightscout
-                var iob : NSString? = currentBgs.object(forKey: "iob") as? NSString
-                
                 if battery == nil {
                     nightscoutData.battery = ""
                 } else {
                     nightscoutData.battery = String(battery!) + "%"
                 }
+                
+                //Get Insulin On Board from Nightscout
+                var iob : NSString? = currentBgs.object(forKey: "iob") as? NSString
                 
                 //Save Insulin-On-Board data
                 if iob == "0" {
@@ -453,6 +467,14 @@ class NightscoutService {
                 }
                 if iob != nil {
                     nightscoutData.iob = String(iob!) + "U"
+                }
+                
+                //Get Carbs On Board from Nightscout
+                let cob : Double? = currentBgs.object(forKey: "cob") as? Double
+                
+                //Save Carbs-On-Board data
+                if cob != nil {
+                    nightscoutData.cob = cob!.string(fractionDigits: 0) + "g"
                 }
                 
                 nightscoutData.sgv = String(sgv)
@@ -484,7 +506,7 @@ class NightscoutService {
             }
         } catch {
             print("Catched unknown exception.")
-            let error = NSError(domain: "PebbleWatchDataError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unknown error while extracting data from Pebble Watch API"])
+            let error = NSError(domain: "PebbleWatchDataError", code: -1, userInfo: [NSLocalizedDescriptionKey: NSLocalizedString("Unknown error while extracting data from Pebble Watch API", comment: "Unkown error while extracting Pebble API data")])
             
             dispatchOnMain {
                 resultHandler(.error(error))
@@ -563,11 +585,290 @@ class NightscoutService {
         return "\(Int(UnitsConverter.toDisplayUnits(raw.rounded())))"
     }
     
-    private func createEmptyOrInvalidUriError() -> Error {
-        return NSError(domain: NSURLErrorDomain, code: NSURLErrorBadURL, userInfo:  [NSLocalizedDescriptionKey: "The base URI is empty or invalid!"])
+    /* Reads the treatment record for the last cannula change, sensor change and battery age */
+    @discardableResult
+    func readLastTreatementEventTimestamp(eventType : EventType, daysToGoBackInTime : Int, resultHandler : @escaping (Date) -> Void) -> URLSessionTask? {
+
+        
+        let baseUri = UserDefaultsRepository.baseUri.value
+        if baseUri == "" {
+            resultHandler(Date())
+            return nil
+        }
+        
+        // Get the current data from REST-Call
+        let lastTreatmentByEventtype = [
+            "find[eventType]" : eventType.rawValue,
+            // Go back 10 Days in time. That should be enough for even the Sensor Age
+            "find[created_at][$gte]" :  Calendar.current.date(
+                byAdding: .day, value: -daysToGoBackInTime, to: Date())!.convertToIsoDate(),
+            "count" : "1"
+            ]
+        
+        let url = UserDefaultsRepository.getUrlWithPathAndQueryParameters(path: "api/v1/treatments", queryParams: lastTreatmentByEventtype)
+        guard url != nil else {
+            resultHandler(Date())
+            return nil
+        }
+
+        let request = URLRequest(url: url!, cachePolicy: URLRequest.CachePolicy.reloadIgnoringLocalCacheData, timeoutInterval: 20)
+        
+        let session = URLSession.shared
+        let task = session.dataTask(with: request, completionHandler: { data, response, error in
+            
+            guard error == nil else {
+                print(error!)
+                dispatchOnMain {
+                    resultHandler(Date())
+                }
+                return
+            }
+            
+            guard data != nil else {
+                print("The received data was nil...")
+                dispatchOnMain { [] in
+                    resultHandler(Date())
+                    }
+                return
+            }
+        
+            let treatmentsArray = try! JSONSerialization.jsonObject(with: data!, options: JSONSerialization.ReadingOptions()) as? [Any]
+
+            guard let siteChangeObject = treatmentsArray as? [[String:Any]]
+            else {
+                dispatchOnMain { [] in
+                    resultHandler(Date())}
+                return
+            }
+            
+            if siteChangeObject.count == 0 {
+                dispatchOnMain { [] in
+                    resultHandler(Date())}
+                return
+            }
+            
+            dispatchOnMain { [] in
+                resultHandler(Date.fromIsoString(isoTime: siteChangeObject[0]["created_at"] as! String))}
+        })
+        
+        task.resume()
+        return task
     }
     
-    private func createNoDataError(description: String) -> Error {
-         return NSError(domain: "NightguardError", code: -1, userInfo: [NSLocalizedDescriptionKey: description])
+    func readLastTemporaryTarget(daysToGoBackInTime : Int, resultHandler : @escaping (TemporaryTargetData?) -> Void) {
+
+        let baseUri = UserDefaultsRepository.baseUri.value
+        if baseUri == "" {
+            resultHandler(nil)
+            return
+        }
+        
+        // Get the current data from REST-Call
+        let lastTreatmentByEventtype = [
+            "find[eventType]" : "Temporary Target",
+            "find[created_at][$gte]" :  Calendar.current.date(
+                byAdding: .day, value: -1, to: Date())!.convertToIsoDate(),
+            "count" : "1"
+            ]
+        
+        let url = UserDefaultsRepository.getUrlWithPathAndQueryParameters(path: "api/v1/treatments", queryParams: lastTreatmentByEventtype)
+        guard url != nil else {
+            resultHandler(nil)
+            return
+        }
+
+        let request = URLRequest(url: url!, cachePolicy: URLRequest.CachePolicy.reloadIgnoringLocalCacheData, timeoutInterval: 20)
+        
+        let session = URLSession.shared
+        let task = session.dataTask(with: request, completionHandler: { data, response, error in
+            
+            guard error == nil else {
+                print(error!)
+                dispatchOnMain {
+                    resultHandler(nil)
+                }
+                return
+            }
+            
+            guard data != nil else {
+                print("The received data was nil...")
+                dispatchOnMain { [] in
+                    resultHandler(nil)
+                    }
+                return
+            }
+        
+            let treatmentsArray = try! JSONSerialization.jsonObject(with: data!, options: JSONSerialization.ReadingOptions()) as? [Any]
+
+            guard let temporaryTargetObject = treatmentsArray as? [[String:Any]]
+            else {
+                dispatchOnMain { [] in
+                    resultHandler(nil)}
+                return
+            }
+            
+            if temporaryTargetObject.count == 0 {
+                dispatchOnMain { [] in
+                    resultHandler(nil)}
+                return
+            }
+            
+            dispatchOnMain { [] in
+                
+                let temporaryTargetData = TemporaryTargetData()
+                temporaryTargetData.targetTop = temporaryTargetObject[0]["targetTop"] as? Int ?? 100
+                temporaryTargetData.targetBottom = temporaryTargetObject[0]["targetBottom"] as? Int ?? 100
+                
+                let createdAt = temporaryTargetObject[0]["created_at"] as? String
+                let duration = temporaryTargetObject[0]["duration"] as? Int
+                temporaryTargetData.activeUntilDate = self.calculateEndDate(createdAt: createdAt, durationInMinutes: duration)
+                
+                resultHandler(temporaryTargetData)
+            }
+        })
+        
+        task.resume()
+    }
+    
+    private func calculateEndDate(createdAt : String?, durationInMinutes : Int?) -> Date {
+
+        if let createdAt = createdAt, let durationInMinutes = durationInMinutes {
+            let creationDate = Date.fromIsoString(isoTime: createdAt)
+            return Calendar.current.date(byAdding: .minute, value: durationInMinutes, to: creationDate) ?? Date()
+        }
+        
+        return Date()
+    }
+    
+    /* Reads the devicestatus to get pump basal rate and profile */
+   @discardableResult
+   func readDeviceStatus(resultHandler : @escaping (DeviceStatusData) -> Void) -> URLSessionTask? {
+
+       
+       let baseUri = UserDefaultsRepository.baseUri.value
+       if baseUri == "" {
+           resultHandler(DeviceStatusData())
+           return nil
+       }
+       
+       // We assume that the last 5 entries should contain the entry with the extended pump entries
+       let lastTwoDeviceStatusQuery = [
+           "count" : "5"
+           ]
+       
+       let url = UserDefaultsRepository.getUrlWithPathAndQueryParameters(path: "api/v1/devicestatus.json", queryParams: lastTwoDeviceStatusQuery)
+       guard url != nil else {
+        resultHandler(DeviceStatusData())
+           return nil
+       }
+
+       let request = URLRequest(url: url!, cachePolicy: URLRequest.CachePolicy.reloadIgnoringLocalCacheData, timeoutInterval: 20)
+       
+       let session = URLSession.shared
+       let task = session.dataTask(with: request, completionHandler: { data, response, error in
+           
+           guard error == nil else {
+               print(error!)
+               dispatchOnMain {
+                resultHandler(DeviceStatusData())
+               }
+               return
+           }
+           
+           guard data != nil else {
+               print("The received data was nil...")
+               dispatchOnMain { [] in
+                resultHandler(DeviceStatusData())
+                   }
+               return
+           }
+       
+           let deviceStatusRawArray = try! JSONSerialization.jsonObject(with: data!, options: JSONSerialization.ReadingOptions()) as? [Any]
+
+           guard let deviceStatusArray = deviceStatusRawArray as? [[String:Any]]
+           else {
+               dispatchOnMain { [] in
+                resultHandler(DeviceStatusData())}
+               return
+           }
+           
+            for deviceStatus in deviceStatusArray {
+                // only the pump device status are interesting here
+                if deviceStatus.contains(where: {$0.key == "pump"}) {
+                    guard let pumpEntries = deviceStatus["pump"] as? [String:Any]
+                    else {
+                            dispatchOnMain { [] in
+                                resultHandler(DeviceStatusData())}
+                            return
+                    }
+                    if pumpEntries.contains(where: {$0.key == "extended"}) {
+                        guard let extendedEntries = pumpEntries["extended"] as? [String:Any]
+                        else {
+                                dispatchOnMain { [] in
+                                    resultHandler(DeviceStatusData())}
+                                return
+                        }
+                        if extendedEntries.contains(where: {$0.key == "ActiveProfile"}) {
+                            dispatchOnMain { [] in
+                                
+                                let deviceStatusData = DeviceStatusData(
+                                    activePumpProfile: extendedEntries["ActiveProfile"] as! String,
+                                    //TODO: Implement and use the AAPS timestamp here
+                                    pumpProfileActiveUntil: nil,
+                                    temporaryBasalRate:
+                                        self.calculateTempBasalPercentage(
+                                            baseBasalRate: extendedEntries["BaseBasalRate"],
+                                            tempBasalAbsoluteRate: extendedEntries["TempBasalAbsoluteRate"]),
+                                    temporaryBasalRateActiveUntil:
+                                        self.calculateTempBasalEndTime(
+                                            tempBasalRemainingMinutes: extendedEntries["TempBasalRemaining"]))
+                                
+                                resultHandler(deviceStatusData)}
+                            return
+                        }
+                    }
+                }
+            }
+        
+            // if no pump entry exists - return nothing
+            dispatchOnMain { [] in
+                resultHandler(DeviceStatusData())}
+            return
+       })
+       
+       task.resume()
+       return task
+   }
+    
+    private func calculateTempBasalPercentage(baseBasalRate: Any?, tempBasalAbsoluteRate: Any?) -> String {
+        
+        guard let baseBasalRateAsDouble = Double.fromAny(baseBasalRate!) else {
+            return ""
+        }
+        if (tempBasalAbsoluteRate == nil) {
+            return ""
+        }
+        guard let tempBasalAbsoluteRateAsDouble = Double.fromAny(tempBasalAbsoluteRate!) else {
+            return ""
+        }
+        
+        return Double(tempBasalAbsoluteRateAsDouble / baseBasalRateAsDouble * 100).rounded().string(fractionDigits: 0)
+    }
+
+    private func calculateTempBasalEndTime(tempBasalRemainingMinutes: Any?) -> Date {
+
+        if let tempBasalRemainingMinutesAsInt = tempBasalRemainingMinutes as? Int {
+            
+            return Calendar.current.date(byAdding: .minute, value: tempBasalRemainingMinutesAsInt, to: Date()) ?? Date()
+        }
+        return Date()
+    }
+
+    private func createEmptyOrInvalidUriError() -> Error {
+        return NSError(domain: NSURLErrorDomain, code: NSURLErrorBadURL, userInfo:  [NSLocalizedDescriptionKey: NSLocalizedString("The base URI is empty or invalid!", comment: "Empty or invalid Uri error")])
+    }
+    
+    private func createNoDataError(description: String ) -> Error {
+        return NSError(domain: "NightguardError", code: -1, userInfo: [NSLocalizedDescriptionKey: description])
     }
 }

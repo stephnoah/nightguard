@@ -7,7 +7,7 @@ target 'nightguard' do
 
   # Pods for nightguard
   pod 'Eureka'
-  pod 'XLActionController', :git=>'https://github.com/xmartlabs/XLActionController', :commit=>'e26395b' # this commit fixes the XCode 11 build problem, waiting for the fix in the next version release
+  pod 'XLActionController'
 
   target 'nightguardTests' do
     inherit! :search_paths
@@ -17,6 +17,8 @@ target 'nightguard' do
   target 'nightguardUITests' do
     inherit! :search_paths
     # Pods for testing
+    pod 'Eureka'
+    pod 'XLActionController'
   end
 
 end

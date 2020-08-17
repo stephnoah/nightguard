@@ -12,7 +12,7 @@ import XCTest
 
 class NightscoutServiceTest: XCTestCase {
     
-    fileprivate let BASE_URI = "http://dhe.my-wan.de:1337"
+    fileprivate let BASE_URI = "http://night.fritz.box"
     
     func testReadYesterdaysChartDataShouldReturnData() {
         
@@ -86,6 +86,6 @@ class NightscoutServiceTest: XCTestCase {
         })
         
         // Then
-        self.waitForExpectations(timeout: 3.0, handler: nil)
+        self.waitForExpectations(timeout: 5.0, handler: nil)
     }
 }

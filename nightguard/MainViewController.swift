@@ -20,6 +20,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     @IBOutlet weak var timeLabel: UILabel!
     @IBOutlet weak var lastUpdateLabel: UILabel!
     @IBOutlet weak var batteryLabel: UILabel!
+    @IBOutlet weak var cobLabel: UILabel!
     @IBOutlet weak var iobLabel: UILabel!
     @IBOutlet weak var spriteKitView: UIView!
     @IBOutlet weak var errorPanelView: UIView!
@@ -31,6 +32,13 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     @IBOutlet weak var actionsMenuButtonPanelView: UIView!
     @IBOutlet weak var statsPanelView: BasicStatsPanelView!
     @IBOutlet weak var slideToSnoozeView: SlideToSnoozeView!
+    @IBOutlet weak var slideToSnoozeViewHeightConstraint: NSLayoutConstraint!
+    @IBOutlet weak var cannulaAgeLabel: UILabel!
+    @IBOutlet weak var sensorAgeLabel: UILabel!
+    @IBOutlet weak var batteryAgeLabel: UILabel!
+    @IBOutlet weak var activeProfileLabel: UILabel!
+    @IBOutlet weak var temporaryBasalLabel: UILabel!
+    @IBOutlet weak var temporaryTargetLabel: UILabel!
     
     // currently presented bedside view controller instance
     private var bedsideViewController: BedsideViewController?
@@ -53,7 +61,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
         // Initialize the ChartScene
         chartScene = ChartScene(size: CGSize(width: spriteKitView.bounds.width, height: spriteKitView.bounds.height),
                                 newCanvasWidth: self.maximumDeviceTextureWidth())
@@ -84,11 +92,11 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
         actionsMenuButtonPanelView.backgroundColor = .black
         
         // stop timer when app enters in background, start is again when becomes active
-        NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground(_:)), name: NSNotification.Name.UIApplicationDidEnterBackground, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationDidEnterBackground(_:)), name: UIApplication.didEnterBackgroundNotification, object: nil)
         
-        NotificationCenter.default.addObserver(self, selector: #selector(applicationWillResignActive(_:)), name: NSNotification.Name.UIApplicationWillResignActive, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationWillResignActive(_:)), name: UIApplication.willResignActiveNotification, object: nil)
 
-        NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground(_:)), name: NSNotification.Name.UIApplicationWillEnterForeground, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationWillEnterForeground(_:)), name: UIApplication.willEnterForegroundNotification, object: nil)
         
         // call first "UIApplicationWillEnterForeground" event by hand, it is not sent when the app starts (just registered for the event)
         prepareForEnteringForeground()
@@ -108,7 +116,11 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
         // show nightscout on long press of action button
         let longPressGestureRecognizer = UILongPressGestureRecognizer(target: self, action: #selector(MainViewController.longPressGesture(_:)))
         self.actionsMenuButton.addGestureRecognizer(longPressGestureRecognizer)
-
+        
+        // show nightscout on force press of action button
+        let forcePressGestureRecognizer = DeepPressGestureRecognizer(target: self, action: #selector(MainViewController.deepPressGesture(_:)))
+        self.actionsMenuButton.addGestureRecognizer(forcePressGestureRecognizer)
+        
         slideToSnoozeView.delegate = self
     }
     
@@ -133,6 +145,13 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
             }
         }
         
+        actionsMenuButtonPanelView.isHidden = AlarmRule.areAlertsGenerallyDisabled.value
+        slideToSnoozeView.isHidden = AlarmRule.areAlertsGenerallyDisabled.value
+        if AlarmRule.areAlertsGenerallyDisabled.value {
+            slideToSnoozeViewHeightConstraint.constant = 0
+        } else {
+            slideToSnoozeViewHeightConstraint.constant = 80
+        }
         slideToSnoozeView.setNeedsLayout()
         slideToSnoozeView.layoutIfNeeded()
     }
@@ -179,7 +198,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     
     @objc func panGesture(_ recognizer : UIPanGestureRecognizer) {
         
-        if recognizer.state == UIGestureRecognizerState.began {
+        if recognizer.state == UIGestureRecognizer.State.began {
             oldXTranslation = 0
 
             // The user just touched the display
@@ -191,7 +210,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
         chartScene.draggedByATouch(translation.x - oldXTranslation)
         oldXTranslation = translation.x
         
-        if (recognizer.state == UIGestureRecognizerState.ended) {
+        if (recognizer.state == UIGestureRecognizer.State.ended) {
             let velocity = recognizer.velocity(in: spriteKitView)
             
             if (velocity.x < -100) {
@@ -208,7 +227,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     // Blood Glucose value that is displayed in the chart.
     @objc func pinchGesture(_ recognizer : UIPinchGestureRecognizer) {
         
-        if recognizer.state == UIGestureRecognizerState.ended {
+        if recognizer.state == UIGestureRecognizer.State.ended {
             chartScene.scale(recognizer.scale, keepScale: true, infoLabelText: "")
         } else {
             chartScene.scale(recognizer.scale, keepScale: false, infoLabelText: "")
@@ -217,7 +236,16 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     
     @objc func longPressGesture(_ recognizer : UILongPressGestureRecognizer) {
         
-        guard recognizer.state == UIGestureRecognizerState.recognized else {
+        guard recognizer.state == UIGestureRecognizer.State.recognized else {
+            return
+        }
+        
+        showNightscout()
+    }
+    
+    @objc func deepPressGesture(_ recognizer : DeepPressGestureRecognizer) {
+        
+        guard recognizer.state == UIGestureRecognizer.State.recognized else {
             return
         }
         
@@ -293,6 +321,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
         // => in that case the user has to know that the values are old!
         self.loadAndPaintCurrentBgData()
         self.loadAndPaintChartData(forceRepaint: forceRepaint)
+        self.loadAndPaintCareData()
     }
     
     func slideToSnoozeDelegateDidFinish(_ sender: SlideToSnoozeView) {
@@ -302,11 +331,11 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     @IBAction func showActionsMenu(_ sender: AnyObject) {
         
         let actionController = MenuActionController()
-        actionController.addAction(Action(MenuActionData(title: "Open your Nightscout site", image: UIImage(named: "Nightscout")!.withRenderingMode(.alwaysTemplate)), style: .default) { [unowned self] _ in
+        actionController.addAction(Action(MenuActionData(title:  NSLocalizedString("Open your Nightscout site", comment: "Link to NS site"), image: UIImage(named: "Nightscout")!.withRenderingMode(.alwaysTemplate)), style: .default) { [unowned self] _ in
             
             self.showNightscout()
         })
-        actionController.addAction(Action(MenuActionData(title: "Fullscreen monitor", image: UIImage(named: "Fullscreen")!.withRenderingMode(.alwaysTemplate)), style: .default) {  [unowned self] _ in
+        actionController.addAction(Action(MenuActionData(title:  NSLocalizedString("Fullscreen monitor", comment: "Fullscreen monitor"), image: UIImage(named: "Fullscreen")!.withRenderingMode(.alwaysTemplate)), style: .default) {  [unowned self] _ in
             self.showFullscreenMonitor()
         })
         
@@ -317,11 +346,13 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     
     func showNightscout() {
         let nightscoutInitialViewController = UIStoryboard(name: "Nightscout", bundle: Bundle.main).instantiateInitialViewController()!
+        nightscoutInitialViewController.modalPresentationStyle = .fullScreen
         self.present(nightscoutInitialViewController, animated: true, completion: nil)
     }
     
     func showFullscreenMonitor() {
         self.bedsideViewController = BedsideViewController.instantiate()
+        self.bedsideViewController?.modalPresentationStyle = .fullScreen
         self.present(self.bedsideViewController!, animated: true)
         
         // initiate a periodic update for feeding fresh data to presented view controller
@@ -335,11 +366,11 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
         style.alignment = .center
         style.lineBreakMode = .byWordWrapping
         
-        let titleAttributes: [NSAttributedStringKey : Any] = [
+        let titleAttributes: [NSAttributedString.Key : Any] = [
             NSAttributedString.Key.font: UIFont.systemFont(ofSize: isSmallDevice ? 24 : 27),
             NSAttributedString.Key.paragraphStyle: style
         ]
-        var title = NSMutableAttributedString(string: "snooze", attributes: titleAttributes)
+        var title = NSMutableAttributedString(string: NSLocalizedString("snooze", comment: "Text of snooze button"), attributes: titleAttributes)
         var subtitle = AlarmRule.getAlarmActivationReason(ignoreSnooze: true)
         var subtitleColor: UIColor = (subtitle != nil) ? .red : .white
         var showSubtitle = true
@@ -350,7 +381,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
                 
                 // no alarm, but maybe we'll show a low prediction warning...
                 if let minutesToLow = PredictionService.singleton.minutesTo(low: AlarmRule.alertIfBelowValue.value), minutesToLow > 0 {
-                    subtitle = "Low Predicted in \(minutesToLow)min"
+                    subtitle = String(format: NSLocalizedString("Low Predicted in %dmin", comment: "Show low prediction warning"), minutesToLow)
                     subtitleColor = .yellow
                 }
             }
@@ -358,7 +389,8 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
 
         if AlarmRule.isSnoozed() {
             let remaininingSnoozeMinutes = AlarmRule.getRemainingSnoozeMinutes()
-            title = NSMutableAttributedString(string: "Snoozed for \n \(remaininingSnoozeMinutes)min", attributes: titleAttributes)
+            let titleString = String(format: NSLocalizedString("Snoozed for %dmin", comment: "Snoozed duration in main page"), remaininingSnoozeMinutes)
+            title = NSMutableAttributedString(string: titleString, attributes: titleAttributes)
             
             // show alert reason message if less than 5 minutes of snoozing (to be prepared!)
             showSubtitle = remaininingSnoozeMinutes < 5
@@ -366,7 +398,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
         
         if let subtitle = subtitle, showSubtitle {
             
-            let messageAttributes: [NSAttributedStringKey : Any] = [
+            let messageAttributes: [NSAttributedString.Key : Any] = [
                 NSAttributedString.Key.font: UIFont.systemFont(ofSize: isSmallDevice ? 14 : 16),
                 NSAttributedString.Key.foregroundColor: subtitleColor,
                 NSAttributedString.Key.paragraphStyle: style
@@ -385,7 +417,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
     
     fileprivate func paintCurrentTime() {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
+        formatter.timeStyle = .short
         self.timeLabel.text = formatter.string(from: Date())
     }
     
@@ -443,6 +475,7 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
             
             self.batteryLabel.text = currentNightscoutData.battery
             self.iobLabel.text = currentNightscoutData.iob
+            self.cobLabel.text = currentNightscoutData.cob
             
             self.showHideRawBGPanel(currentNightscoutData)
             self.rawValuesPanel.label.text = currentNightscoutData.noise
@@ -480,6 +513,39 @@ class MainViewController: UIViewController, SlideToSnoozeDelegate {
         }
     }
     
+    fileprivate func loadAndPaintCareData() {
+        
+        self.sensorAgeLabel.convertToAge(prefix: "SAGE ", time: NightscoutCacheService.singleton.getSensorChangeTime(), hoursUntilWarning: 24 * 9, hoursUntilCritical: 24 * 13)
+        self.cannulaAgeLabel.convertToAge(prefix: "CAGE ", time:  NightscoutCacheService.singleton.getCannulaChangeTime(),
+                                          hoursUntilWarning: 24 * 2 - 2, hoursUntilCritical: 24 * 3 - 2)
+        self.batteryAgeLabel.convertToAge(prefix: "BAT ", time:  NightscoutCacheService.singleton.getPumpBatteryChangeTime(),
+                                          hoursUntilWarning: 24 * 28, hoursUntilCritical: 24 * 30)
+        let deviceStatusData = NightscoutCacheService.singleton.getDeviceStatusData { [unowned self] result in
+            self.paintDeviceStatusData(deviceStatusData: result)
+        }
+        
+        self.paintDeviceStatusData(deviceStatusData: deviceStatusData)
+    }
+    
+    fileprivate func paintDeviceStatusData(deviceStatusData : DeviceStatusData) -> Void {
+    
+        self.activeProfileLabel.text = deviceStatusData.activePumpProfile;
+        if deviceStatusData.temporaryBasalRate != "" &&
+            deviceStatusData.temporaryBasalRateActiveUntil.remainingMinutes() > 0 {
+            
+            self.temporaryBasalLabel.text = "TB \(deviceStatusData.temporaryBasalRate)% \(deviceStatusData.temporaryBasalRateActiveUntil.remainingMinutes())m"
+        } else {
+            self.temporaryBasalLabel.text = "TB --"
+        }
+        
+        let temporaryTargetData = NightscoutCacheService.singleton.getTemporaryTargetData()
+        if temporaryTargetData.activeUntilDate.remainingMinutes() > 0 {
+            self.temporaryTargetLabel.text = "TT \(temporaryTargetData.targetTop) \(temporaryTargetData.activeUntilDate.remainingMinutes())m"
+        } else {
+            self.temporaryTargetLabel.text = "TT --"
+        }
+    }
+
     fileprivate func paintChartData(todaysData : [BloodSugar], yesterdaysData : [BloodSugar]) {
         
         let todaysDataWithPrediction = todaysData + PredictionService.singleton.nextHourGapped

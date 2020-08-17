@@ -20,6 +20,7 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
     @IBOutlet var timeLabel: WKInterfaceLabel!
     @IBOutlet var batteryLabel: WKInterfaceLabel!
     @IBOutlet var spriteKitView: WKInterfaceSKScene!
+    @IBOutlet var cobLabel: WKInterfaceLabel!
     @IBOutlet var iobLabel: WKInterfaceLabel!
     @IBOutlet var errorLabel: WKInterfaceLabel!
     @IBOutlet var errorGroup: WKInterfaceGroup!
@@ -30,6 +31,14 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
     @IBOutlet var rawValuesGroup: WKInterfaceGroup!
     
     @IBOutlet var nightSafeIndicator: WKInterfaceGroup!
+    
+    @IBOutlet var cannulaAgeLabel: WKInterfaceLabel!
+    @IBOutlet var sensorAgeLabel: WKInterfaceLabel!
+    @IBOutlet var batteryAgeLabel: WKInterfaceLabel!
+    
+    @IBOutlet var activeProfileLabel: WKInterfaceLabel!
+    @IBOutlet var temporaryBasalLabel: WKInterfaceLabel!
+    @IBOutlet var temporaryTargetLabel: WKInterfaceLabel!
     
     // set by AppMessageService when receiving messages/data from phone app and current bg data or charts should be repainted
     var shouldRepaintCurrentBgDataOnActivation = false
@@ -143,6 +152,7 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
         crownSequencer.delegate = self
         
         paintChartData(todaysData: cachedTodaysBgValues, yesterdaysData: cachedYesterdaysBgValues, moveToLatestValue: false)
+        loadAndPaintCareData()
         
         // reset the first activation flag!
         isFirstActivation = false
@@ -204,6 +214,7 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
         
         loadAndPaintCurrentBgData(forceRefresh: true)
         loadAndPaintChartData(forceRepaint: true)
+        loadAndPaintCareData()
     }
     
     @objc func doToogleZoomScrollAction() {
@@ -250,10 +261,15 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
     fileprivate func createMenuItems() {
         
         self.clearAllMenuItems()
-        self.addMenuItem(with: WKMenuItemIcon.info, title: "Info", action: #selector(InterfaceController.doInfoMenuAction))
-        self.addMenuItem(with: WKMenuItemIcon.resume, title: "Refresh", action: #selector(InterfaceController.doRefreshMenuAction))
-        self.addMenuItem(with: WKMenuItemIcon.block, title: "Snooze", action: #selector(InterfaceController.doSnoozeMenuAction))
-        self.addMenuItem(with: WKMenuItemIcon.more, title: zoomingIsActive ? "Scroll" : "Zoom", action: #selector(InterfaceController.doToogleZoomScrollAction))
+        self.addMenuItem(with: WKMenuItemIcon.info, title:
+            NSLocalizedString("Info", comment: "Watch Popup Info Label"), action: #selector(InterfaceController.doInfoMenuAction))
+        self.addMenuItem(with: WKMenuItemIcon.resume, title:
+            NSLocalizedString("Refresh", comment: "Watch Popup Refresh Label"), action: #selector(InterfaceController.doRefreshMenuAction))
+        self.addMenuItem(with: WKMenuItemIcon.block, title:
+            NSLocalizedString("Snooze", comment: "Watch Popup Snooze Label"), action: #selector(InterfaceController.doSnoozeMenuAction))
+        self.addMenuItem(with: WKMenuItemIcon.more, title: zoomingIsActive
+            ? NSLocalizedString("Scroll", comment:  "Watch Popup Scroll Label")
+            : NSLocalizedString("Zoom", comment: "Watch Popup Zoom Label"), action: #selector(InterfaceController.doToogleZoomScrollAction))
     }
     
     // Returns true, if the size of one array changed
@@ -322,6 +338,7 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
             // show the activity indicator (hide the iob & arrow overlapping views); also hide the errors
             self.errorGroup.setHidden(true)
             self.iobLabel.setText(nil)
+            self.cobLabel.setText(nil)
             self.deltaArrowLabel.setText(nil)
             
             self.activityIndicatorImage.setHidden(false)
@@ -356,6 +373,7 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
         self.timeLabel.setTextColor(UIColorChanger.getTimeLabelColor(currentNightscoutData.time))
         
         self.batteryLabel.setText(currentNightscoutData.battery)
+        self.cobLabel.setText(currentNightscoutData.cob)
         self.iobLabel.setText(currentNightscoutData.iob)
         
         // show raw values panel ONLY if configured so and we have a valid rawbg value!
@@ -420,7 +438,8 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
     
     fileprivate func paintChartData(todaysData : [BloodSugar], yesterdaysData : [BloodSugar], moveToLatestValue : Bool) {
         
-        let bounds = WKInterfaceDevice.current().screenBounds
+        let device = WKInterfaceDevice.current()
+        let bounds = device.screenBounds
         
         let todaysDataWithPrediction = todaysData + PredictionService.singleton.nextHourGapped
         self.chartScene.paintChart(
@@ -432,6 +451,38 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
             infoLabel: determineInfoLabel())
     }
     
+    fileprivate func loadAndPaintCareData() {
+        
+        self.sensorAgeLabel.convertToAge(prefix: "S ", time: NightscoutCacheService.singleton.getSensorChangeTime(), hoursUntilWarning: 24 * 9, hoursUntilCritical: 24 * 13)
+        self.cannulaAgeLabel.convertToAge(prefix: "C ", time:  NightscoutCacheService.singleton.getCannulaChangeTime(),
+                                          hoursUntilWarning: 24 * 2 - 2, hoursUntilCritical: 24 * 3 - 2)
+        self.batteryAgeLabel.convertToAge(prefix: "B ", time:  NightscoutCacheService.singleton.getPumpBatteryChangeTime(),
+                                          hoursUntilWarning: 24 * 28, hoursUntilCritical: 24 * 30)
+        let deviceStatusData = NightscoutCacheService.singleton.getDeviceStatusData({ [unowned self] result in
+            self.paintDeviceStatusData(deviceStatusData: result)
+        })
+        
+        self.paintDeviceStatusData(deviceStatusData: deviceStatusData)
+    }
+    
+    func paintDeviceStatusData(deviceStatusData: DeviceStatusData) {
+        self.activeProfileLabel.setText(deviceStatusData.activePumpProfile)
+        if deviceStatusData.temporaryBasalRate != "" &&
+            deviceStatusData.temporaryBasalRateActiveUntil.remainingMinutes() > 0 {
+            
+            self.temporaryBasalLabel.setText("TB \(deviceStatusData.temporaryBasalRate)% \(deviceStatusData.temporaryBasalRateActiveUntil.remainingMinutes())m")
+        } else {
+            self.temporaryBasalLabel.setText("TB --")
+        }
+        
+        let temporaryTargetData = NightscoutCacheService.singleton.getTemporaryTargetData()
+        if temporaryTargetData.activeUntilDate.remainingMinutes() > 0 {
+            self.temporaryTargetLabel.setText("TT \(temporaryTargetData.targetTop) \(temporaryTargetData.activeUntilDate.remainingMinutes())m")
+        } else {
+            self.temporaryTargetLabel.setText("TT --")
+        }
+    }
+
     func determineInfoLabel() -> String {
         
         if !AlarmRule.isSnoozed() {
@@ -442,7 +493,7 @@ class InterfaceController: WKInterfaceController, WKCrownDelegate {
             }
         }
         
-        return "Snoozed " + String(AlarmRule.getRemainingSnoozeMinutes()) + "min"
+        return String(format: NSLocalizedString("Snoozed %dmin", comment: "Snoozed duration on watch"), AlarmRule.getRemainingSnoozeMinutes())
     }
     
     func sendNightSafeRequest() {

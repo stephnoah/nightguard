@@ -75,6 +75,12 @@ class ChartPainter {
         UIGraphicsBeginImageContextWithOptions(size, opaque, scale)
         let context = UIGraphicsGetCurrentContext()
         
+        // this can happen if fastly switching from statistics pane to main pane
+        // I think this has to do with the screen rotating
+        if context == nil {
+            return (nil, 0)
+        }
+        
         // Setup complete, do drawing here
         paintNicePartArea(context!, upperBoundNiceValue: upperBoundNiceValue, lowerBoundNiceValue: lowerBoundNiceValue)
         
@@ -227,9 +233,9 @@ class ChartPainter {
         // paint the upper/lower bounds text
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .left
-        let attrs = [NSAttributedStringKey.font: UIFont(name: "Helvetica Bold", size: 14)!,
-                     NSAttributedStringKey.paragraphStyle: paragraphStyle,
-                     NSAttributedStringKey.foregroundColor: UIColor.gray]
+        let attrs = [NSAttributedString.Key.font: UIFont(name: "Helvetica Bold", size: 14)!,
+                     NSAttributedString.Key.paragraphStyle: paragraphStyle,
+                     NSAttributedString.Key.foregroundColor: UIColor.gray]
         
         var x = 5
         while (x < canvasWidth) {
@@ -270,9 +276,9 @@ class ChartPainter {
         // Draw the time
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center
-        let attrs = [NSAttributedStringKey.font: UIFont(name: "Helvetica Bold", size: 14)!,
-                     NSAttributedStringKey.paragraphStyle: paragraphStyle,
-                     NSAttributedStringKey.foregroundColor: UIColor.gray]
+        let attrs = [NSAttributedString.Key.font: UIFont(name: "Helvetica Bold", size: 14)!,
+                     NSAttributedString.Key.paragraphStyle: paragraphStyle,
+                     NSAttributedString.Key.foregroundColor: UIColor.gray]
         
         if durationIsMoreThan6Hours(minimumXValue, maxTimestamp: maximumXValue) && canvasWidth < 1920 {
             paintEverySecondHour(context, attrs: attrs)
@@ -288,15 +294,15 @@ class ChartPainter {
         
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center
-        var attrs = [NSAttributedStringKey.font: UIFont(name: "Helvetica Bold", size: 14)!,
-                     NSAttributedStringKey.paragraphStyle: paragraphStyle,
-                     NSAttributedStringKey.foregroundColor: UIColor.gray]
+        var attrs = [NSAttributedString.Key.font: UIFont(name: "Helvetica Bold", size: 14)!,
+                     NSAttributedString.Key.paragraphStyle: paragraphStyle,
+                     NSAttributedString.Key.foregroundColor: UIColor.gray]
         
         var i : Int = 0
         for name in namesToDisplay {
             
             i = i + 1
-            attrs.updateValue(getColor(i), forKey: NSAttributedStringKey.foregroundColor)
+            attrs.updateValue(getColor(i), forKey: NSAttributedString.Key.foregroundColor)
             let xPosition = canvasWidth - 22 * nrOfNames + i * 20 - 20
             name.draw(with: CGRect(x: xPosition, y: 20, width: 20, height: 14),
                                 options: .usesLineFragmentOrigin, attributes: attrs, context: nil)
@@ -308,11 +314,11 @@ class ChartPainter {
         return (maxTimestamp - minTimestamp) > sixHours
     }
     
-    fileprivate func paintEverySecondHour(_ context : CGContext, attrs : [NSAttributedStringKey : Any]) {
+    fileprivate func paintEverySecondHour(_ context : CGContext, attrs : [NSAttributedString.Key : Any]) {
         let halfHours = determineEverySecondHourBetween(minimumXValue, maxTimestamp: maximumXValue)
         
         let hourFormat = DateFormatter()
-        hourFormat.dateFormat = "HH:mm"
+        hourFormat.timeStyle = .short
         for timestamp in halfHours {
             let hourString : String = hourFormat.string(from: Date(timeIntervalSince1970 : timestamp / 1000))
             let x = calcXValue(timestamp)
@@ -320,6 +326,7 @@ class ChartPainter {
                                     options: .usesLineFragmentOrigin, attributes: attrs, context: nil)
             
             context.beginPath()
+            context.setStrokeColor(BLACK.cgColor)
             drawLine(context, x1: x, y1: 0, x2: x, y2: CGFloat(canvasHeight) - 20)
             context.strokePath()
         }
@@ -348,11 +355,11 @@ class ChartPainter {
         return evenHours
     }
     
-    fileprivate func paintHourTimestamps(_ context : CGContext, attrs : [NSAttributedStringKey : Any]) {
+    fileprivate func paintHourTimestamps(_ context : CGContext, attrs : [NSAttributedString.Key : Any]) {
         let hours = determineHoursBetween(minimumXValue, maxTimestamp: maximumXValue)
         
         let hourFormat = DateFormatter()
-        hourFormat.dateFormat = "HH:mm"
+        hourFormat.timeStyle = .short
         
         context.setStrokeColor(BLACK.cgColor)
         for timestamp in hours {
@@ -362,6 +369,7 @@ class ChartPainter {
                                     options: .usesLineFragmentOrigin, attributes: attrs, context: nil)
             
             context.beginPath()
+            context.setStrokeColor(BLACK.cgColor)
             drawLine(context, x1: x, y1: 0, x2: x, y2: CGFloat(canvasHeight) - 20)
             context.strokePath()
         }
